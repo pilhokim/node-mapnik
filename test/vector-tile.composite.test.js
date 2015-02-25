@@ -110,7 +110,8 @@ describe('mapnik.VectorTile.composite', function() {
         });
     });
 
-    it('should render with simple concatenation', function(done) {
+    it.only('should render with simple concatenation', function(done) {
+        console.log('1')
         var coords = [0,0,0];
         var vtile = new mapnik.VectorTile(coords[0],coords[1],coords[2]);
         var vtiles = [get_tile_at('lines',coords),get_tile_at('points',coords)];
@@ -121,25 +122,36 @@ describe('mapnik.VectorTile.composite', function() {
         assert.equal(expected_length,expected_length2);
         // Now composite the tiles together
         var opts = {}; // NOTE: options here will have no impact in the case of concatenation
+        console.log('2')
         vtile.composite(vtiles,opts);
+        console.log('3')
         // It is safe to call vt.getData after vt.composite without calling vt.parse
         var composited_data = vtile.getData();
+        console.log('4')
         assert.equal(composited_data.length,expected_length);
         // It is also safe to call vtile.names() without vt.parse because vt.names() can
         // operate on the raw protobuf data and does not need parsed data
         // In the future other functions will gain this ability.
         assert.deepEqual(vtile.names(),['lines','points']);
         // Now we parse in order to be able to test rendering
+        console.log('5')
         vtile.parse(function(err) {
+            console.log('6')
             if (err) throw err;
+            console.log('7')
             // ensure the lengths still match
             assert.equal(vtile.getData().length,expected_length);
             var map = new mapnik.Map(256,256);
+            console.log('8')
             map.loadSync(data_base +'/styles/all.xml');
+            console.log('9')
             vtile.render(map,new mapnik.Image(256,256),function(err,im) {
+                console.log('10')
                 if (err) throw err;
+                console.log('11')
                 var expected_file = data_base +'/expected/concat.png';
                 assert.equal(0,compare_to_image(im,expected_file));
+                console.log('12')
                 done();
             });
         });
