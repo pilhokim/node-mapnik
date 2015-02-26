@@ -2647,6 +2647,47 @@ private:
     std::vector<mapnik::layer> const & layers_;
 };
 
+struct my_visitor_tiledata
+{
+    my_visitor_tiledata(vector_tile::Tile const& tiledata)
+        : tiledata_(tiledata) {}
+    
+    void operator() (mapnik::image_rgba8 & pixmap)
+    {
+        std::clog << "Inside my visitor tiledata: " << pixmap.height() << std::endl;
+    }
+
+    template <typename T>
+    void operator() (T &)
+    {
+        std::clog << "runtime poop" << std::endl;
+        throw std::runtime_error("This is an error in layers");
+    }
+private:
+    vector_tile::Tile const& tiledata_;
+};
+
+struct my_visitor_scale
+{
+    my_visitor_scale(double scale)
+        : scale_(scale) {}
+    
+    void operator() (mapnik::image_rgba8 & pixmap)
+    {
+        std::clog << "Inside my visitor scale: " << pixmap.height() << std::endl;
+    }
+
+    template <typename T>
+    void operator() (T &)
+    {
+        std::clog << "runtime poop" << std::endl;
+        throw std::runtime_error("This is an error in layers");
+    }
+private:
+    double scale_;
+};
+
+
 struct agg_renderer_visitor
 {
     agg_renderer_visitor(mapnik::Map const& m, 
@@ -2833,7 +2874,7 @@ void VectorTile::EIO_RenderTile(uv_work_t* req)
         // render all layers with agg
         else
         {
-            std::clog << "Starting!" << std::endl;
+            std::clog << "===Starting!" << std::endl;
             my_visitor_map visit_map(map_in);
             mapnik::util::apply_visitor(visit_map, *closure->im->get());
             my_visitor_req visit_req(m_req);
@@ -2844,8 +2885,12 @@ void VectorTile::EIO_RenderTile(uv_work_t* req)
             mapnik::util::apply_visitor(visit_proj, *closure->im->get());
             my_visitor_layers visit_layers(layers);
             mapnik::util::apply_visitor(visit_layers, *closure->im->get());
+            my_visitor_tiledata visit_tiledata(tiledata);
+            mapnik::util::apply_visitor(visit_tiledata, *closure->im->get());
+            my_visitor_scale visit_scale(scale_denom);
+            mapnik::util::apply_visitor(visit_scale, *closure->im->get());
             std::clog << "...final visitor start" << std::endl;
-            agg_renderer_visitor visit(map_in, 
+            agg_renderer_visitor visitor(map_in, 
                                        m_req, 
                                        closure,
                                        map_proj,
@@ -2853,12 +2898,14 @@ void VectorTile::EIO_RenderTile(uv_work_t* req)
                                        tiledata,
                                        scale_denom);
             std::clog << "apply last visitor" << std::endl;
-            mapnik::util::apply_visitor(visit, *closure->im->get());
+            mapnik::util::apply_visitor(visitor, *closure->im->get());
+            std::clog << "apply visitor done" << std::endl;
 
 
             mapnik::image_any & im = *closure->im->get();
             if (im.is<mapnik::image_rgba8>())
             {
+                std::clog << "Starting real rendering" << std::endl;
                 mapnik::image_rgba8 & im_data = mapnik::util::get<mapnik::image_rgba8>(im);
                 mapnik::agg_renderer<mapnik::image_rgba8> ren(map_in,m_req,
                                                         closure->variables,
@@ -2866,6 +2913,7 @@ void VectorTile::EIO_RenderTile(uv_work_t* req)
                 ren.start_map_processing(map_in);
                 process_layers(ren,m_req,map_proj,layers,scale_denom,tiledata,closure);
                 ren.end_map_processing(map_in);
+                std::clog << "Done real rendering" << std::endl;
             }
             else
             {
