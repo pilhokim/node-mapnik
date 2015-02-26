@@ -2688,9 +2688,9 @@ private:
 };
 
 
-struct agg_renderer_visitor
+struct agg_renderer_visitor_vt
 {
-    agg_renderer_visitor(mapnik::Map const& m, 
+    agg_renderer_visitor_vt(mapnik::Map const& m, 
                          mapnik::request const& req, 
                          vector_tile_render_baton_t * closure,
                          mapnik::projection const& map_proj,
@@ -2890,7 +2890,7 @@ void VectorTile::EIO_RenderTile(uv_work_t* req)
             my_visitor_scale visit_scale(scale_denom);
             mapnik::util::apply_visitor(visit_scale, *closure->im->get());
             std::clog << "...final visitor start" << std::endl;
-            agg_renderer_visitor visitor(map_in, 
+            agg_renderer_visitor_vt visitor(map_in, 
                                        m_req, 
                                        closure,
                                        map_proj,
