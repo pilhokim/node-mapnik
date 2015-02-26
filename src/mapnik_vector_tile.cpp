@@ -2547,7 +2547,9 @@ template <typename Renderer> void process_layers(Renderer & ren,
 
 struct my_visitor_one
 {
-
+    my_visitor_one(std::vector<mapnik::layer> const & layers)
+        : layers_(layers) {}
+    
     void operator() (mapnik::image_rgba8 & pixmap)
     {
         std::clog << "Inside my visitor one: " << pixmap.width() << std::endl;
@@ -2558,10 +2560,15 @@ struct my_visitor_one
     {
         std::runtime_error("This is an error in one");
     }
+
+private:
+    std::vector<mapnik::layer> const & layers_;
 };
 
 struct my_visitor_two
 {
+    my_visitor_two(std::vector<mapnik::layer> const & layers)
+        : layers_(layers) {}
 
     void operator() (mapnik::image_rgba8 & pixmap)
     {
@@ -2573,6 +2580,8 @@ struct my_visitor_two
     {
         std::runtime_error("This is an error in two");
     }
+private:
+    std::vector<mapnik::layer> const & layers_;
 };
 
 void VectorTile::EIO_RenderTile(uv_work_t* req)
@@ -2718,10 +2727,10 @@ void VectorTile::EIO_RenderTile(uv_work_t* req)
         {
             std::clog << "Starting!" << std::endl;
             mapnik::image_any & a_im = *closure->im->get();
-            my_visitor_one visit_one;
+            my_visitor_one visit_one(layers);
             std::clog << "Visitor one created!" << std::endl;
             mapnik::util::apply_visitor(visit_one, a_im);
-            my_visitor_two visit_two;
+            my_visitor_two visit_two(layers);
             std::clog << "Visitor two created!" << std::endl;
             mapnik::util::apply_visitor(visit_two, *closure->im->get());
 
