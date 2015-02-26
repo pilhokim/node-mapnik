@@ -2599,7 +2599,7 @@ struct agg_renderer_visitor
           map_proj_(map_proj),
           layers_(layers),
           tiledata_(tiledata),
-          scale_denominator_(scale_denominator) {}
+          scale_denominator_(scale_denominator) {std::clog << "visitor building" << std::endl;}
 
     void operator() (mapnik::image_rgba8 & pixmap)
     {
@@ -2777,7 +2777,7 @@ void VectorTile::EIO_RenderTile(uv_work_t* req)
             my_visitor_two visit_two(layers);
             std::clog << "Visitor two created!" << std::endl;
             mapnik::util::apply_visitor(visit_two, *closure->im->get());
-
+            std::clog << "final visitor start" << std::endl;
             agg_renderer_visitor visit(map_in, 
                                        m_req, 
                                        closure,
@@ -2785,6 +2785,7 @@ void VectorTile::EIO_RenderTile(uv_work_t* req)
                                        layers,
                                        tiledata,
                                        scale_denom);
+            std::clog << "apply last visitor" << std::endl;
             mapnik::util::apply_visitor(visit, *closure->im->get());
 
 
