@@ -2545,6 +2545,36 @@ template <typename Renderer> void process_layers(Renderer & ren,
     }
 }
 
+struct my_visitor_one
+{
+
+    void operator() (mapnik::image_rgba8 & pixmap)
+    {
+        std::clog << "Inside my visitor one: " << pixmap.width() << std::endl;
+    }
+
+    template <typename T>
+    void operator() (T &)
+    {
+        std::runtime_error("This is an error in one");
+    }
+};
+
+struct my_visitor_two
+{
+
+    void operator() (mapnik::image_rgba8 & pixmap)
+    {
+        std::clog << "Inside my visitor two: " << pixmap.height() << std::endl;
+    }
+
+    template <typename T>
+    void operator() (T &)
+    {
+        std::runtime_error("This is an error in two");
+    }
+};
+
 void VectorTile::EIO_RenderTile(uv_work_t* req)
 {
     vector_tile_render_baton_t *closure = static_cast<vector_tile_render_baton_t *>(req->data);
@@ -2686,6 +2716,15 @@ void VectorTile::EIO_RenderTile(uv_work_t* req)
         // render all layers with agg
         else
         {
+            std::clog << "Starting!" << std::endl;
+            mapnik::image_any & a_im = *closure->im->get();
+            my_visitor_one visit_one;
+            std::clog << "Visitor one created!" << std::endl;
+            mapnik::util::apply_visitor(visit_one, a_im);
+            my_visitor_two visit_two;
+            std::clog << "Visitor two created!" << std::endl;
+            mapnik::util::apply_visitor(visit_two, *closure->im->get());
+
             mapnik::image_any & im = *closure->im->get();
             if (im.is<mapnik::image_rgba8>())
             {
