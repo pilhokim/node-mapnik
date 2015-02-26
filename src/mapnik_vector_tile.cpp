@@ -2584,6 +2584,50 @@ private:
     std::vector<mapnik::layer> const & layers_;
 };
 
+struct agg_renderer_visitor
+{
+    agg_renderer_visitor(mapnik::Map const& m, 
+                         mapnik::request const& req, 
+                         vector_tile_render_baton_t * closure,
+                         mapnik::projection const& map_proj,
+                         std::vector<mapnik::layer> const& layers,
+                         vector_tile::Tile const& tiledata,
+                         double scale_denominator)
+        : m_(m),
+          req_(req),
+          closure_(closure),
+          map_proj_(map_proj),
+          layers_(layers),
+          tiledata_(tiledata),
+          scale_denominator_(scale_denominator) {}
+
+    void operator() (mapnik::image_rgba8 & pixmap)
+    {
+        std::clog << "BOOM " << pixmap.height() << std::endl;
+        /*mapnik::agg_renderer<mapnik::image_rgba8> ren(m_,req_,
+                                                closure_->variables,
+                                                pixmap,closure_->scale_factor);
+        ren.start_map_processing(m_);
+        process_layers(ren,req_,map_proj_,layers_,scale_denominator_,tiledata_,closure_);
+        ren.end_map_processing(m_);*/
+    }
+    
+    template <typename T>
+    void operator() (T &)
+    {
+        throw std::runtime_error("This image type is not currently supported for rendering.");
+    }
+
+  private:
+    mapnik::Map const& m_;
+    mapnik::request const& req_;
+    vector_tile_render_baton_t * closure_;
+    mapnik::projection const& map_proj_;
+    std::vector<mapnik::layer> const& layers_;
+    vector_tile::Tile const& tiledata_;
+    double scale_denominator_;
+};
+
 void VectorTile::EIO_RenderTile(uv_work_t* req)
 {
     vector_tile_render_baton_t *closure = static_cast<vector_tile_render_baton_t *>(req->data);
@@ -2733,6 +2777,16 @@ void VectorTile::EIO_RenderTile(uv_work_t* req)
             my_visitor_two visit_two(layers);
             std::clog << "Visitor two created!" << std::endl;
             mapnik::util::apply_visitor(visit_two, *closure->im->get());
+
+            agg_renderer_visitor visit(map_in, 
+                                       m_req, 
+                                       closure,
+                                       map_proj,
+                                       layers,
+                                       tiledata,
+                                       scale_denom);
+            mapnik::util::apply_visitor(visit, *closure->im->get());
+
 
             mapnik::image_any & im = *closure->im->get();
             if (im.is<mapnik::image_rgba8>())
