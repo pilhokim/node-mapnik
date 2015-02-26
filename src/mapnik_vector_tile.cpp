@@ -2545,40 +2545,103 @@ template <typename Renderer> void process_layers(Renderer & ren,
     }
 }
 
-struct my_visitor_one
+struct my_visitor_map
 {
-    my_visitor_one(std::vector<mapnik::layer> const & layers)
-        : layers_(layers) {}
+    my_visitor_map(mapnik::Map const& m)
+        : m_(m) {}
     
     void operator() (mapnik::image_rgba8 & pixmap)
     {
-        std::clog << "Inside my visitor one: " << pixmap.width() << std::endl;
+        std::clog << "Inside my visitor map: " << pixmap.width() << std::endl;
     }
 
     template <typename T>
     void operator() (T &)
     {
-        std::runtime_error("This is an error in one");
+        std::clog << "runtime poop" << std::endl;
+        throw std::runtime_error("This is an error in map");
     }
 
 private:
-    std::vector<mapnik::layer> const & layers_;
+    mapnik::Map const& m_;
 };
 
-struct my_visitor_two
+struct my_visitor_req
 {
-    my_visitor_two(std::vector<mapnik::layer> const & layers)
+    my_visitor_req(mapnik::request const& req)
+        : req_(req) {}
+    
+    void operator() (mapnik::image_rgba8 & pixmap)
+    {
+        std::clog << "Inside my visitor req: " << pixmap.width() << std::endl;
+    }
+
+    template <typename T>
+    void operator() (T &)
+    {
+        std::clog << "runtime poop" << std::endl;
+        throw std::runtime_error("This is an error in req");
+    }
+
+private:
+    mapnik::request const& req_;
+};
+
+struct my_visitor_closure
+{
+    my_visitor_closure(vector_tile_render_baton_t * closure)
+        : closure_(closure) {}
+    
+    void operator() (mapnik::image_rgba8 & pixmap)
+    {
+        std::clog << "Inside my visitor closure: " << pixmap.width() << std::endl;
+    }
+
+    template <typename T>
+    void operator() (T &)
+    {
+        std::clog << "runtime poop" << std::endl;
+        throw std::runtime_error("This is an error in closure");
+    }
+
+private:
+    vector_tile_render_baton_t * closure_;
+};
+
+struct my_visitor_proj
+{
+    my_visitor_proj(mapnik::projection const& map_proj)
+        : map_proj_(map_proj) {}
+    
+    void operator() (mapnik::image_rgba8 & pixmap)
+    {
+        std::clog << "Inside my visitor proj: " << pixmap.width() << std::endl;
+    }
+
+    template <typename T>
+    void operator() (T &)
+    {
+        std::clog << "runtime poop" << std::endl;
+        throw std::runtime_error("This is an error in proj");
+    }
+private:
+    mapnik::projection const& map_proj_;
+};
+struct my_visitor_layers
+{
+    my_visitor_layers(std::vector<mapnik::layer> const & layers)
         : layers_(layers) {}
 
     void operator() (mapnik::image_rgba8 & pixmap)
     {
-        std::clog << "Inside my visitor two: " << pixmap.height() << std::endl;
+        std::clog << "Inside my visitor layers: " << pixmap.height() << std::endl;
     }
 
     template <typename T>
     void operator() (T &)
     {
-        std::runtime_error("This is an error in two");
+        std::clog << "runtime poop" << std::endl;
+        throw std::runtime_error("This is an error in layers");
     }
 private:
     std::vector<mapnik::layer> const & layers_;
@@ -2615,6 +2678,7 @@ struct agg_renderer_visitor
     template <typename T>
     void operator() (T &)
     {
+        std::clog << "BLAHH!" << std::endl;
         throw std::runtime_error("This image type is not currently supported for rendering.");
     }
 
@@ -2770,14 +2834,17 @@ void VectorTile::EIO_RenderTile(uv_work_t* req)
         else
         {
             std::clog << "Starting!" << std::endl;
-            mapnik::image_any & a_im = *closure->im->get();
-            my_visitor_one visit_one(layers);
-            std::clog << "Visitor one created!" << std::endl;
-            mapnik::util::apply_visitor(visit_one, a_im);
-            my_visitor_two visit_two(layers);
-            std::clog << "Visitor two created!" << std::endl;
-            mapnik::util::apply_visitor(visit_two, *closure->im->get());
-            std::clog << "final visitor start" << std::endl;
+            my_visitor_map visit_map(map_in);
+            mapnik::util::apply_visitor(visit_map, *closure->im->get());
+            my_visitor_req visit_req(m_req);
+            mapnik::util::apply_visitor(visit_req, *closure->im->get());
+            my_visitor_closure visit_closure(closure);
+            mapnik::util::apply_visitor(visit_closure, *closure->im->get());
+            my_visitor_proj visit_proj(map_proj);
+            mapnik::util::apply_visitor(visit_proj, *closure->im->get());
+            my_visitor_layers visit_layers(layers);
+            mapnik::util::apply_visitor(visit_layers, *closure->im->get());
+            std::clog << "...final visitor start" << std::endl;
             agg_renderer_visitor visit(map_in, 
                                        m_req, 
                                        closure,
