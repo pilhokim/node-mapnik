@@ -164,6 +164,7 @@ void VectorTile::Initialize(Handle<Object> target) {
     NODE_SET_PROTOTYPE_METHOD(lcons, "setData", setData);
     NODE_SET_PROTOTYPE_METHOD(lcons, "setDataSync", setDataSync);
     NODE_SET_PROTOTYPE_METHOD(lcons, "getData", getData);
+    NODE_SET_PROTOTYPE_METHOD(lcons, "getDataSync", getDataSync);
     NODE_SET_PROTOTYPE_METHOD(lcons, "parse", parse);
     NODE_SET_PROTOTYPE_METHOD(lcons, "parseSync", parseSync);
     NODE_SET_PROTOTYPE_METHOD(lcons, "addData", addData);
@@ -185,7 +186,7 @@ void VectorTile::Initialize(Handle<Object> target) {
     NODE_SET_PROTOTYPE_METHOD(lcons, "height", height);
     NODE_SET_PROTOTYPE_METHOD(lcons, "painted", painted);
     NODE_SET_PROTOTYPE_METHOD(lcons, "clear", clear);
-    NODE_SET_PROTOTYPE_METHOD(lcons, "clearSync", clear);
+    NODE_SET_PROTOTYPE_METHOD(lcons, "clearSync", clearSync);
     NODE_SET_PROTOTYPE_METHOD(lcons, "empty", empty);
     NODE_SET_PROTOTYPE_METHOD(lcons, "isSolid", isSolid);
     NODE_SET_PROTOTYPE_METHOD(lcons, "isSolidSync", isSolidSync);
@@ -2144,9 +2145,17 @@ void VectorTile::EIO_AfterSetData(uv_work_t* req)
     delete closure;
 }
 
-NAN_METHOD(VectorTile::getData)
+NAN_METHOD(VectorTile::getDataSync)
 {
     NanScope();
+    NanReturnValue(_getDataSync(args));
+}
+
+// TODO - support compression
+
+Local<Value> VectorTile::_getDataSync(_NAN_METHOD_ARGS)
+{
+    NanEscapableScope();
     VectorTile* d = node::ObjectWrap::Unwrap<VectorTile>(args.Holder());
     try {
         // shortcut: return raw data and avoid trip through proto object
@@ -2158,10 +2167,10 @@ NAN_METHOD(VectorTile::getData)
                 s << "(" << raw_size << " raw bytes >= node::Buffer::kMaxLength)";
                 throw std::runtime_error(s.str());
             }
-            NanReturnValue(NanNewBufferHandle((char*)d->buffer_.data(),raw_size));
+            return NanEscapeScope(NanNewBufferHandle((char*)d->buffer_.data(),raw_size));
         } else {
             if (d->byte_size_ <= 0) {
-                NanReturnValue(NanNewBufferHandle(0));
+                return NanEscapeScope(NanNewBufferHandle(0));
             } else {
                 // NOTE: tiledata.ByteSize() must be called
                 // after each modification of tiledata otherwise the
@@ -2182,16 +2191,82 @@ NAN_METHOD(VectorTile::getData)
                 if (end - start != d->byte_size_) {
                     throw std::runtime_error("serialization failed, possible race condition");
                 }
-                NanReturnValue(retbuf);
+                return NanEscapeScope(retbuf);
             }
         }
     } catch (std::exception const& ex) {
         NanThrowError(ex.what());
+        return NanEscapeScope(NanUndefined());
+    }
+    return NanEscapeScope(NanUndefined());
+}
+
+typedef struct {
+    uv_work_t request;
+    VectorTile* d;
+    std::string format;
+    bool error;
+    std::string error_name;
+    Persistent<Function> cb;
+} get_data_vector_tile_baton_t;
+
+NAN_METHOD(VectorTile::getData)
+{
+    NanScope();
+    VectorTile* d = node::ObjectWrap::Unwrap<VectorTile>(args.Holder());
+
+    if (args.Length() == 0) {
+        NanReturnValue(_getDataSync(args));
+    }
+
+    // ensure callback is a function
+    Local<Value> callback = args[args.Length() - 1];
+    if (!callback->IsFunction()) {
+        NanThrowTypeError("last argument must be a callback function");
         NanReturnUndefined();
     }
+    get_data_vector_tile_baton_t *closure = new get_data_vector_tile_baton_t();
+    closure->request.data = closure;
+    closure->d = d;
+    closure->error = false;
+    NanAssignPersistent(closure->cb, callback.As<Function>());
+    uv_queue_work(uv_default_loop(), &closure->request, AsyncGetData, (uv_after_work_cb)AfterGetData);
+    d->Ref();
     NanReturnUndefined();
 }
 
+void VectorTile::AsyncGetData(uv_work_t* req)
+{
+    get_data_vector_tile_baton_t *closure = static_cast<get_data_vector_tile_baton_t *>(req->data);
+    try
+    {
+        // TODO
+    }
+    catch(std::exception const& ex)
+    {
+        closure->error = true;
+        closure->error_name = ex.what();
+    }
+}
+
+void VectorTile::AfterGetData(uv_work_t* req)
+{
+    NanScope();
+    get_data_vector_tile_baton_t *closure = static_cast<get_data_vector_tile_baton_t *>(req->data);
+    if (closure->error)
+    {
+        Local<Value> argv[1] = { NanError(closure->error_name.c_str()) };
+        NanMakeCallback(NanGetCurrentContext()->Global(), NanNew(closure->cb), 1, argv);
+    }
+    else
+    {
+        Local<Value> argv[1] = { NanNull() };
+        NanMakeCallback(NanGetCurrentContext()->Global(), NanNew(closure->cb), 1, argv);
+    }
+    closure->d->Unref();
+    NanDisposePersistent(closure->cb);
+    delete closure;
+}
 struct vector_tile_render_baton_t {
     uv_work_t request;
     Map* m;
@@ -2746,6 +2821,7 @@ void VectorTile::EIO_AfterRenderTile(uv_work_t* req)
     NanDisposePersistent(closure->cb);
     delete closure;
 }
+
 NAN_METHOD(VectorTile::clearSync)
 {
     NanScope();
